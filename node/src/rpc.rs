@@ -35,6 +35,7 @@ pub fn create_full<C, P>(
 	C::Api: substrate_frame_rpc_system::AccountNonceApi<Block, AccountId, Index>,
 	C::Api: pallet_transaction_payment_rpc::TransactionPaymentRuntimeApi<Block, Balance>,
 	C::Api: BlockBuilder<Block>,
+	C::Api: participate_runtime_api::ParticipateApi<Block>,
 	P: TransactionPool + 'static,
 {
 	use substrate_frame_rpc_system::{FullSystem, SystemApi};
@@ -53,6 +54,9 @@ pub fn create_full<C, P>(
 
 	io.extend_with(
 		TransactionPaymentApi::to_delegate(TransactionPayment::new(client.clone()))
+	);
+	io.extend_with(
+		participate_rpc::ParticipateApi::to_delegate(participate_rpc::LivingHashes::new(client.clone()))
 	);
 
 	// Extend this RPC with a custom API by using the following syntax.

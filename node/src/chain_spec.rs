@@ -1,6 +1,7 @@
 use sp_core::{Pair, Public, sr25519};
 use node_template_runtime::{
-	AccountId, AuraConfig, BalancesConfig, GenesisConfig, GrandpaConfig,
+	DifficultyConfig,
+	AccountId, BalancesConfig, GenesisConfig,
 	SudoConfig, SystemConfig, WASM_BINARY, Signature
 };
 use sp_consensus_aura::sr25519::AuthorityId as AuraId;
@@ -143,15 +144,18 @@ fn testnet_genesis(
 			// Configure endowed accounts with initial balance of 1 << 60.
 			balances: endowed_accounts.iter().cloned().map(|k|(k, 1 << 60)).collect(),
 		}),
-		pallet_aura: Some(AuraConfig {
-			authorities: initial_authorities.iter().map(|x| (x.0.clone())).collect(),
-		}),
-		pallet_grandpa: Some(GrandpaConfig {
-			authorities: initial_authorities.iter().map(|x| (x.1.clone(), 1)).collect(),
-		}),
+		// pallet_aura: Some(AuraConfig {
+		// 	authorities: initial_authorities.iter().map(|x| (x.0.clone())).collect(),
+		// }),
+		// pallet_grandpa: Some(GrandpaConfig {
+		// 	authorities: initial_authorities.iter().map(|x| (x.1.clone(), 1)).collect(),
+		// }),
 		pallet_sudo: Some(SudoConfig {
 			// Assign network admin rights.
 			key: root_key,
+		}),
+		difficulty: Some(DifficultyConfig {
+			dischif: 10000000
 		}),
 	}
 }

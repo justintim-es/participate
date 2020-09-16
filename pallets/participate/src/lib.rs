@@ -200,7 +200,7 @@ impl<T: Trait> Module<T> {
 			u8,
 		>::new())
 	}
-	fn living_hashes() -> Vec<T::Hash> {
+	pub fn get_living_hashes() -> Vec<T::Hash> {
 		let mut queue = Self::queue_transient();
 		let mut veschec = Vec::new();
 		while let Some(hash) = queue.pop() {

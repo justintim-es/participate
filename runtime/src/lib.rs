@@ -7,7 +7,7 @@
 include!(concat!(env!("OUT_DIR"), "/wasm_binary.rs"));
 
 use sp_std::prelude::*;
-use sp_core::{crypto::KeyTypeId, OpaqueMetadata};
+use sp_core::{crypto::KeyTypeId, OpaqueMetadata, U256};
 use sp_runtime::{
 	ApplyExtrinsicResult, generic, create_runtime_str, impl_opaque_keys, MultiSignature,
 	transaction_validity::{TransactionValidity, TransactionSource},
@@ -37,9 +37,6 @@ pub use frame_support::{
 		constants::{BlockExecutionWeight, ExtrinsicBaseWeight, RocksDbWeight, WEIGHT_PER_SECOND},
 	},
 };
-
-/// Import the template pallet.
-pub use template;
 
 /// An index to a block.
 pub type BlockNumber = u32;
@@ -85,8 +82,6 @@ pub mod opaque {
 
 	impl_opaque_keys! {
 		pub struct SessionKeys {
-			pub aura: Aura,
-			pub grandpa: Grandpa,
 		}
 	}
 }
@@ -192,26 +187,26 @@ impl frame_system::Trait for Runtime {
 	type SystemWeightInfo = ();
 }
 
-impl pallet_aura::Trait for Runtime {
-	type AuthorityId = AuraId;
-}
+// impl pallet_aura::Trait for Runtime {
+// 	type AuthorityId = AuraId;
+// }
 
-impl pallet_grandpa::Trait for Runtime {
-	type Event = Event;
-	type Call = Call;
+// impl pallet_grandpa::Trait for Runtime {
+// 	type Event = Event;
+// 	type Call = Call;
 
-	type KeyOwnerProofSystem = ();
+// 	type KeyOwnerProofSystem = ();
 
-	type KeyOwnerProof =
-		<Self::KeyOwnerProofSystem as KeyOwnerProofSystem<(KeyTypeId, GrandpaId)>>::Proof;
+// 	type KeyOwnerProof =
+// 		<Self::KeyOwnerProofSystem as KeyOwnerProofSystem<(KeyTypeId, GrandpaId)>>::Proof;
 
-	type KeyOwnerIdentification = <Self::KeyOwnerProofSystem as KeyOwnerProofSystem<(
-		KeyTypeId,
-		GrandpaId,
-	)>>::IdentificationTuple;
+// 	type KeyOwnerIdentification = <Self::KeyOwnerProofSystem as KeyOwnerProofSystem<(
+// 		KeyTypeId,
+// 		GrandpaId,
+// 	)>>::IdentificationTuple;
 
-	type HandleEquivocation = ();
-}
+// 	type HandleEquivocation = ();
+// }
 
 parameter_types! {
 	pub const MinimumPeriod: u64 = SLOT_DURATION / 2;
@@ -220,7 +215,7 @@ parameter_types! {
 impl pallet_timestamp::Trait for Runtime {
 	/// A timestamp: milliseconds since the unix epoch.
 	type Moment = u64;
-	type OnTimestampSet = Aura;
+	type OnTimestampSet = Difficulty;
 	type MinimumPeriod = MinimumPeriod;
 	type WeightInfo = ();
 }
@@ -258,10 +253,13 @@ impl pallet_sudo::Trait for Runtime {
 }
 
 /// Configure the pallet template in pallets/template.
-impl template::Trait for Runtime {
+impl participate::Trait for Runtime {
 	type Event = Event;
 	type Currency = Balances;
 	type Randomness = RandomnessCollectiveFlip;
+}
+impl difficulty::Trait for Runtime {
+	type Event = Event;
 }
 
 // Create the runtime by composing the FRAME pallets that were previously configured.
@@ -274,13 +272,14 @@ construct_runtime!(
 		System: frame_system::{Module, Call, Config, Storage, Event<T>},
 		RandomnessCollectiveFlip: pallet_randomness_collective_flip::{Module, Call, Storage},
 		Timestamp: pallet_timestamp::{Module, Call, Storage, Inherent},
-		Aura: pallet_aura::{Module, Config<T>, Inherent},
-		Grandpa: pallet_grandpa::{Module, Call, Storage, Config, Event},
+		// Aura: pallet_aura::{Module, Config<T>, Inherent},
+		// Grandpa: pallet_grandpa::{Module, Call, Storage, Config, Event},
 		Balances: pallet_balances::{Module, Call, Storage, Config<T>, Event<T>},
 		TransactionPayment: pallet_transaction_payment::{Module, Storage},
 		Sudo: pallet_sudo::{Module, Call, Config<T>, Storage, Event<T>},
 		// Include the custom logic from the template pallet in the runtime.
-		TemplateModule: template::{Module, Call, Storage, Event<T>},
+		Participate: participate::{Module, Call, Storage, Event<T>},
+		Difficulty: difficulty::{Module, Call, Storage, Event<T>, Config}
 	}
 );
 
@@ -378,15 +377,15 @@ impl_runtime_apis! {
 		}
 	}
 
-	impl sp_consensus_aura::AuraApi<Block, AuraId> for Runtime {
-		fn slot_duration() -> u64 {
-			Aura::slot_duration()
-		}
+	// impl sp_consensus_aura::AuraApi<Block, AuraId> for Runtime {
+	// 	fn slot_duration() -> u64 {
+	// 		Aura::slot_duration()
+	// 	}
 
-		fn authorities() -> Vec<AuraId> {
-			Aura::authorities()
-		}
-	}
+	// 	fn authorities() -> Vec<AuraId> {
+	// 		Aura::authorities()
+	// 	}
+	// }
 
 	impl sp_session::SessionKeys<Block> for Runtime {
 		fn generate_session_keys(seed: Option<Vec<u8>>) -> Vec<u8> {
@@ -400,31 +399,31 @@ impl_runtime_apis! {
 		}
 	}
 
-	impl fg_primitives::GrandpaApi<Block> for Runtime {
-		fn grandpa_authorities() -> GrandpaAuthorityList {
-			Grandpa::grandpa_authorities()
-		}
+	// impl fg_primitives::GrandpaApi<Block> for Runtime {
+	// 	fn grandpa_authorities() -> GrandpaAuthorityList {
+	// 		Grandpa::grandpa_authorities()
+	// 	}
 
-		fn submit_report_equivocation_unsigned_extrinsic(
-			_equivocation_proof: fg_primitives::EquivocationProof<
-				<Block as BlockT>::Hash,
-				NumberFor<Block>,
-			>,
-			_key_owner_proof: fg_primitives::OpaqueKeyOwnershipProof,
-		) -> Option<()> {
-			None
-		}
+	// 	fn submit_report_equivocation_unsigned_extrinsic(
+	// 		_equivocation_proof: fg_primitives::EquivocationProof<
+	// 			<Block as BlockT>::Hash,
+	// 			NumberFor<Block>,
+	// 		>,
+	// 		_key_owner_proof: fg_primitives::OpaqueKeyOwnershipProof,
+	// 	) -> Option<()> {
+	// 		None
+	// 	}
 
-		fn generate_key_ownership_proof(
-			_set_id: fg_primitives::SetId,
-			_authority_id: GrandpaId,
-		) -> Option<fg_primitives::OpaqueKeyOwnershipProof> {
-			// NOTE: this is the only implementation possible since we've
-			// defined our key owner proof type as a bottom type (i.e. a type
-			// with no values).
-			None
-		}
-	}
+	// 	fn generate_key_ownership_proof(
+	// 		_set_id: fg_primitives::SetId,
+	// 		_authority_id: GrandpaId,
+	// 	) -> Option<fg_primitives::OpaqueKeyOwnershipProof> {
+	// 		// NOTE: this is the only implementation possible since we've
+	// 		// defined our key owner proof type as a bottom type (i.e. a type
+	// 		// with no values).
+	// 		None
+	// 	}
+	// }
 	
 	impl frame_system_rpc_runtime_api::AccountNonceApi<Block, AccountId, Index> for Runtime {
 		fn account_nonce(account: AccountId) -> Index {
@@ -438,6 +437,16 @@ impl_runtime_apis! {
 			len: u32,
 		) -> pallet_transaction_payment_rpc_runtime_api::RuntimeDispatchInfo<Balance> {
 			TransactionPayment::query_info(uxt, len)
+		}
+	}
+	impl participate_runtime_api::ParticipateApi<Block> for Runtime {
+		fn get_living_hashes() -> Vec<<Block as BlockT>::Hash> {
+			Participate::get_living_hashes()
+		}
+	}
+	impl sp_consensus_pow::DifficultyApi<Block, U256> for Runtime {
+		fn difficulty() -> U256 {
+			U256::from(1000000)
 		}
 	}
 }

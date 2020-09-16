@@ -137,6 +137,35 @@ git = 'https://github.com/paritytech/substrate.git'
 tag = 'v2.0.0-rc6'
 version = '2.0.0-rc6'
 
+[dependencies.participate-rpc]
+path = '../pallets/participate/rpc'
+
+[dependencies.participate-runtime-api]
+path = '../pallets/participate/runtime-api'
+
+[dependencies.sp-consensus-pow]
+version = '0.8.0-rc6'
+
+[dependencies.codec]
+default-features = false
+features = ['derive']
+package = 'parity-scale-codec'
+version = '1.3.4'
+
+[dependencies.sc-consensus-pow]
+version = '0.8.0-rc6'
+
+[dependencies.sha3]
+version = '0.8'
+
+[dependencies.rand]
+version = "0.7" 
+features = ["small_rng"]
+
+[dependencies.sc-network]
+version = '0.8.0-rc6'
+
+
 [dependencies]
 jsonrpc-core = '14.0.3'
 structopt = '0.3.8'

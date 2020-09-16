@@ -1,0 +1,29 @@
+[package]
+name = "participate-runtime-api"
+version = "2.0.0"
+authors = ['Substrate DevHub <https://github.com/substrate-developer-hub>']
+edition = "2018"
+license = "GPL-3.0-or-later"
+
+[dependencies.sp-api]
+default-features = false
+git = 'https://github.com/paritytech/substrate.git'
+tag = 'v2.0.0-rc6'
+version = '2.0.0-rc6'
+
+[dependencies.sp-std]
+default-features = false
+git = 'https://github.com/paritytech/substrate.git'
+tag = 'v2.0.0-rc6'
+version = '2.0.0-rc6'
+
+
+[dev-dependencies]
+serde_json = "1.0.41"
+
+[features]
+default = ["std"]
+std = [
+	"sp-api/std",
+    'sp-std/std',
+]

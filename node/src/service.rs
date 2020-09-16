@@ -10,6 +10,7 @@ use sc_executor::native_executor_instance;
 pub use sc_executor::NativeExecutor;
 use sp_consensus_aura::sr25519::{AuthorityPair as AuraPair};
 use sc_finality_grandpa::{FinalityProofProvider as GrandpaFinalityProofProvider, SharedVoterState};
+use sc_network::config::DummyFinalityProofRequestBuilder;
 
 // Our native executor instance.
 native_executor_instance!(
@@ -51,30 +52,52 @@ pub fn new_partial(config: &Configuration) -> Result<sc_service::PartialComponen
 		client.clone(),
 	);
 
-	let (grandpa_block_import, grandpa_link) = sc_finality_grandpa::block_import(
-		client.clone(), &(client.clone() as Arc<_>), select_chain.clone(),
-	)?;
+	// let (grandpa_block_import, grandpa_link) = sc_finality_grandpa::block_import(
+	// 	client.clone(), &(client.clone() as Arc<_>), select_chain.clone(),
+	// )?;
 
-	let aura_block_import = sc_consensus_aura::AuraBlockImport::<_, _, _, AuraPair>::new(
-		grandpa_block_import.clone(), client.clone(),
+	// let aura_block_import = sc_consensus_aura::AuraBlockImport::<_, _, _, AuraPair>::new(
+	// 	grandpa_block_import.clone(), client.clone(),
+	// );
+
+	// let import_queue = sc_consensus_aura::import_queue::<_, _, _, AuraPair, _, _>(
+	// 	sc_consensus_aura::slot_duration(&*client)?,
+	// 	aura_block_import.clone(),
+	// 	Some(Box::new(grandpa_block_import.clone())),
+	// 	None,
+	// 	client.clone(),
+	// 	inherent_data_providers.clone(),
+	// 	&task_manager.spawn_handle(),
+	// 	config.prometheus_registry(),
+	// 	sp_consensus::CanAuthorWithNativeVersion::new(client.executor().clone()),
+	// )?;
+	let can_author_with =
+	sp_consensus::CanAuthorWithNativeVersion::new(client.executor().clone());
+
+	let pow_block_import = sc_consensus_pow::PowBlockImport::new(
+		client.clone(),
+		client.clone(),
+		crate::pow::Sha3Algorithm::new(client.clone()),
+		0, // check inherents starting at block 0
+		Some(select_chain.clone()),
+		inherent_data_providers.clone(),
+		can_author_with,
 	);
 
-	let import_queue = sc_consensus_aura::import_queue::<_, _, _, AuraPair, _, _>(
-		sc_consensus_aura::slot_duration(&*client)?,
-		aura_block_import.clone(),
-		Some(Box::new(grandpa_block_import.clone())),
+	let import_queue = sc_consensus_pow::import_queue(
+	Box::new(pow_block_import.clone()),
 		None,
-		client.clone(),
+		None,
+		crate::pow::Sha3Algorithm::new(client.clone()),
 		inherent_data_providers.clone(),
 		&task_manager.spawn_handle(),
 		config.prometheus_registry(),
-		sp_consensus::CanAuthorWithNativeVersion::new(client.executor().clone()),
-	)?;
+	)?;	
 
 	Ok(sc_service::PartialComponents {
 		client, backend, task_manager, import_queue, keystore, select_chain, transaction_pool,
 		inherent_data_providers,
-		other: (aura_block_import, grandpa_link),
+		other: pow_block_import,
 	})
 }
 
@@ -83,11 +106,11 @@ pub fn new_full(config: Configuration) -> Result<TaskManager, ServiceError> {
 	let sc_service::PartialComponents {
 		client, backend, mut task_manager, import_queue, keystore, select_chain, transaction_pool,
 		inherent_data_providers,
-		other: (block_import, grandpa_link),
+		other: pow_block_import,
 	} = new_partial(&config)?;
 
-	let finality_proof_provider =
-		GrandpaFinalityProofProvider::new_for_service(backend.clone(), client.clone());
+	// let finality_proof_provider =
+	// 	GrandpaFinalityProofProvider::new_for_service(backend.clone(), client.clone());
 
 	let (network, network_status_sinks, system_rpc_tx, network_starter) =
 		sc_service::build_network(sc_service::BuildNetworkParams {
@@ -99,7 +122,7 @@ pub fn new_full(config: Configuration) -> Result<TaskManager, ServiceError> {
 			on_demand: None,
 			block_announce_validator_builder: None,
 			finality_proof_request_builder: None,
-			finality_proof_provider: Some(finality_proof_provider.clone()),
+			finality_proof_provider: None,
 		})?;
 
 	if config.offchain_worker.enabled {
@@ -109,9 +132,9 @@ pub fn new_full(config: Configuration) -> Result<TaskManager, ServiceError> {
 	}
 
 	let role = config.role.clone();
-	let force_authoring = config.force_authoring;
-	let name = config.network.node_name.clone();
-	let enable_grandpa = !config.disable_grandpa;
+	// let force_authoring = config.force_authoring;
+	// let name = config.network.node_name.clone();
+	// let enable_grandpa = !config.disable_grandpa;
 	let prometheus_registry = config.prometheus_registry().cloned();
 	let telemetry_connection_sinks = sc_service::TelemetryConnectionSinks::default();
 
@@ -149,26 +172,40 @@ pub fn new_full(config: Configuration) -> Result<TaskManager, ServiceError> {
 			transaction_pool,
 			prometheus_registry.as_ref(),
 		);
-
+		let rounds = 500;
 		let can_author_with =
 			sp_consensus::CanAuthorWithNativeVersion::new(client.executor().clone());
 
-		let aura = sc_consensus_aura::start_aura::<_, _, _, _, _, AuraPair, _, _, _>(
-			sc_consensus_aura::slot_duration(&*client)?,
-			client.clone(),
-			select_chain,
-			block_import,
+		// let aura = sc_consensus_aura::start_aura::<_, _, _, _, _, AuraPair, _, _, _>(
+		// 	sc_consensus_aura::slot_duration(&*client)?,
+		// 	client.clone(),
+		// 	select_chain,
+		// 	block_import,
+		// 	proposer,
+		// 	network.clone(),
+		// 	inherent_data_providers.clone(),
+		// 	force_authoring,
+		// 	keystore.clone(),
+		// 	can_author_with,
+		// )?;
+		sc_consensus_pow::start_mine(
+			Box::new(pow_block_import),
+			client,
+			crate::pow::Sha3Algorithm::new(client.clone()),
 			proposer,
-			network.clone(),
-			inherent_data_providers.clone(),
-			force_authoring,
-			keystore.clone(),
+			None, // No preruntime digests
+			rounds,
+			network,
+			std::time::Duration::new(2, 0),
+			// Choosing not to supply a select_chain means we will use the client's
+			// possibly-outdated metadata when fetching the block to mine on
+			Some(select_chain),
+			inherent_data_providers,
 			can_author_with,
-		)?;
-
+		);
 		// the AURA authoring task is considered essential, i.e. if it
 		// fails we take down the service with it.
-		task_manager.spawn_essential_handle().spawn_blocking("aura", aura);
+		// task_manager.spawn_essential_handle().spawn_blocking("aura", aura);
 	}
 
 	// if the node isn't actively participating in consensus then it doesn't
@@ -179,47 +216,47 @@ pub fn new_full(config: Configuration) -> Result<TaskManager, ServiceError> {
 		None
 	};
 
-	let grandpa_config = sc_finality_grandpa::Config {
-		// FIXME #1578 make this available through chainspec
-		gossip_duration: Duration::from_millis(333),
-		justification_period: 512,
-		name: Some(name),
-		observer_enabled: false,
-		keystore,
-		is_authority: role.is_network_authority(),
-	};
+	// let grandpa_config = sc_finality_grandpa::Config {
+	// 	// FIXME #1578 make this available through chainspec
+	// 	gossip_duration: Duration::from_millis(333),
+	// 	justification_period: 512,
+	// 	name: Some(name),
+	// 	observer_enabled: false,
+	// 	keystore,
+	// 	is_authority: role.is_network_authority(),
+	// };
 
-	if enable_grandpa {
-		// start the full GRANDPA voter
-		// NOTE: non-authorities could run the GRANDPA observer protocol, but at
-		// this point the full voter should provide better guarantees of block
-		// and vote data availability than the observer. The observer has not
-		// been tested extensively yet and having most nodes in a network run it
-		// could lead to finality stalls.
-		let grandpa_config = sc_finality_grandpa::GrandpaParams {
-			config: grandpa_config,
-			link: grandpa_link,
-			network,
-			inherent_data_providers,
-			telemetry_on_connect: Some(telemetry_connection_sinks.on_connect_stream()),
-			voting_rule: sc_finality_grandpa::VotingRulesBuilder::default().build(),
-			prometheus_registry,
-			shared_voter_state: SharedVoterState::empty(),
-		};
+	// if enable_grandpa {
+	// 	// start the full GRANDPA voter
+	// 	// NOTE: non-authorities could run the GRANDPA observer protocol, but at
+	// 	// this point the full voter should provide better guarantees of block
+	// 	// and vote data availability than the observer. The observer has not
+	// 	// been tested extensively yet and having most nodes in a network run it
+	// 	// could lead to finality stalls.
+	// 	let grandpa_config = sc_finality_grandpa::GrandpaParams {
+	// 		config: grandpa_config,
+	// 		link: grandpa_link,
+	// 		network,
+	// 		inherent_data_providers,
+	// 		telemetry_on_connect: Some(telemetry_connection_sinks.on_connect_stream()),
+	// 		voting_rule: sc_finality_grandpa::VotingRulesBuilder::default().build(),
+	// 		prometheus_registry,
+	// 		shared_voter_state: SharedVoterState::empty(),
+	// 	};
 
-		// the GRANDPA voter task is considered infallible, i.e.
-		// if it fails we take down the service with it.
-		task_manager.spawn_essential_handle().spawn_blocking(
-			"grandpa-voter",
-			sc_finality_grandpa::run_grandpa_voter(grandpa_config)?
-		);
-	} else {
-		sc_finality_grandpa::setup_disabled_grandpa(
-			client,
-			&inherent_data_providers,
-			network,
-		)?;
-	}
+	// 	// the GRANDPA voter task is considered infallible, i.e.
+	// 	// if it fails we take down the service with it.
+	// 	task_manager.spawn_essential_handle().spawn_blocking(
+	// 		"grandpa-voter",
+	// 		sc_finality_grandpa::run_grandpa_voter(grandpa_config)?
+	// 	);
+	// } else {
+	// 	sc_finality_grandpa::setup_disabled_grandpa(
+	// 		client,
+	// 		&inherent_data_providers,
+	// 		network,
+	// 	)?;
+	// }
 
 	network_starter.start_network();
 	Ok(task_manager)
@@ -237,29 +274,54 @@ pub fn new_light(config: Configuration) -> Result<TaskManager, ServiceError> {
 		client.clone(),
 		on_demand.clone(),
 	));
-
-	let grandpa_block_import = sc_finality_grandpa::light_block_import(
-		client.clone(), backend.clone(), &(client.clone() as Arc<_>),
-		Arc::new(on_demand.checker().clone()) as Arc<_>,
-	)?;
-	let finality_proof_import = grandpa_block_import.clone();
-	let finality_proof_request_builder =
-		finality_proof_import.create_finality_proof_request_builder();
-
-	let import_queue = sc_consensus_aura::import_queue::<_, _, _, AuraPair, _, _>(
-		sc_consensus_aura::slot_duration(&*client)?,
-		grandpa_block_import,
-		None,
-		Some(Box::new(finality_proof_import)),
+	let select_chain = sc_consensus::LongestChain::new(backend.clone());
+	let inherent_data_providers = sp_inherents::InherentDataProviders::new();
+	let _can_author_with =
+		sp_consensus::CanAuthorWithNativeVersion::new(client.executor().clone());	
+	let pow_block_import = sc_consensus_pow::PowBlockImport::new(
 		client.clone(),
-		InherentDataProviders::new(),
+		client.clone(),
+		crate::pow::Sha3Algorithm::new(client.clone()),
+		0, // check inherents starting at block 0
+		Some(select_chain),
+		inherent_data_providers.clone(),
+		// FixMe #375
+		sp_consensus::AlwaysCanAuthor,
+	);
+	let import_queue = sc_consensus_pow::import_queue(
+		Box::new(pow_block_import),
+		None,
+		None,
+		crate::pow::Sha3Algorithm::new(client.clone()),
+		inherent_data_providers,
 		&task_manager.spawn_handle(),
 		config.prometheus_registry(),
-		sp_consensus::NeverCanAuthor,
 	)?;
+	let fprb = Box::new(DummyFinalityProofRequestBuilder::default()) as Box<_>;
 
-	let finality_proof_provider =
-		GrandpaFinalityProofProvider::new_for_service(backend.clone(), client.clone());
+	
+	// let grandpa_block_import = sc_finality_grandpa::light_block_import(
+	// 	client.clone(), backend.clone(), &(client.clone() as Arc<_>),
+	// 	Arc::new(on_demand.checker().clone()) as Arc<_>,
+	// )?;
+	// let finality_proof_import = grandpa_block_import.clone();
+	// let finality_proof_request_builder =
+	// 	finality_proof_import.create_finality_proof_request_builder();
+
+	// let import_queue = sc_consensus_aura::import_queue::<_, _, _, AuraPair, _, _>(
+	// 	sc_consensus_aura::slot_duration(&*client)?,
+	// 	grandpa_block_import,
+	// 	None,
+	// 	Some(Box::new(finality_proof_import)),
+	// 	client.clone(),
+	// 	InherentDataProviders::new(),
+	// 	&task_manager.spawn_handle(),
+	// 	config.prometheus_registry(),
+	// 	sp_consensus::NeverCanAuthor,
+	// )?;
+
+	// let finality_proof_provider =
+	// 	GrandpaFinalityProofProvider::new_for_service(backend.clone(), client.clone());
 
 	let (network, network_status_sinks, system_rpc_tx, network_starter) =
 		sc_service::build_network(sc_service::BuildNetworkParams {
@@ -270,8 +332,8 @@ pub fn new_light(config: Configuration) -> Result<TaskManager, ServiceError> {
 			import_queue,
 			on_demand: Some(on_demand.clone()),
 			block_announce_validator_builder: None,
-			finality_proof_request_builder: Some(finality_proof_request_builder),
-			finality_proof_provider: Some(finality_proof_provider),
+			finality_proof_request_builder: Some(fprb),
+			finality_proof_provider: None,
 		})?;
 
 	if config.offchain_worker.enabled {
